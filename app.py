@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-st.title("✅ App Loaded: Debt Snowball Calculator")
+st.title("Debt Snowball Calculator")
 
 try:
     st.sidebar.header("Monthly Budget")
