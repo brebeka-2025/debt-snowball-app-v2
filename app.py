@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
-st.title("💳 Debt Snowball Calculator")
+st.title("✅ App Loaded: Debt Snowball Calculator")
 
 try:
     st.sidebar.header("Monthly Budget")
@@ -14,6 +14,7 @@ try:
     st.sidebar.markdown(f"**Total Snowball Budget:** ${total_budget:,.2f}")
 
     st.header("Enter Your Debts")
+
     initial_df = pd.DataFrame({
         "Debt Name": ["Credit Card A", "Credit Card B"],
         "Starting Balance": [1500, 3000],
@@ -22,6 +23,10 @@ try:
     })
 
     debt_df = st.data_editor(initial_df, num_rows="dynamic", use_container_width=True)
+
+    # Remove invalid or zero rows
+    debt_df = debt_df.dropna()
+    debt_df = debt_df[debt_df["Starting Balance"] > 0]
 
     if st.button("Calculate Snowball Plan"):
         with st.spinner("Calculating your payoff plan..."):
@@ -34,39 +39,50 @@ try:
                 month += 1
                 month_name = (datetime.today().replace(day=1) + pd.DateOffset(months=month-1)).strftime("%b %Y")
 
-                # Step 1: Calculate minimum payments
                 min_payments = []
                 for i in active_debts.index:
-                    balance = active_debts.at[i, "Balance"]
-                    if balance > 0:
-                        min_payments.append(min(active_debts.at[i, "Minimum Payment"], balance))
-                    else:
-                        min_payments.append(0)
+                    bal = active_debts.at[i, "Balance"]
+                    min_payments.append(min(active_debts.at[i, "Minimum Payment"], bal) if bal > 0 else 0)
 
-                remaining_budget = total_budget - sum(min_payments)
+                monthly_budget = total_budget
+                remaining_budget = monthly_budget
+                payments = {}
 
-                # Step 2: Allocate payments
+                # First, apply minimums
                 for i in active_debts.index:
-                    balance = active_debts.at[i, "Balance"]
-                    if balance <= 0:
+                    bal = active_debts.at[i, "Balance"]
+                    if bal <= 0:
+                        payments[i] = 0
+                        continue
+                    pay = min(min_payments[i], remaining_budget)
+                    payments[i] = pay
+                    remaining_budget -= pay
+
+                # Then snowball to next unpaid
+                for i in active_debts[active_debts["Balance"] > 0].index:
+                    bal = active_debts.at[i, "Balance"]
+                    if remaining_budget <= 0:
+                        break
+                    extra = min(bal, remaining_budget)
+                    payments[i] += extra
+                    remaining_budget -= extra
+
+                # Apply payments with interest
+                for i in active_debts.index:
+                    bal = active_debts.at[i, "Balance"]
+                    if bal <= 0:
                         continue
 
                     rate = active_debts.at[i, "Interest Rate (%)"] / 100 / 12
-                    interest = balance * rate
-                    min_payment = min_payments[i]
-
-                    if i == active_debts[active_debts["Balance"] > 0].index[0]:
-                        payment = min(min_payment + remaining_budget, balance + interest)
-                    else:
-                        payment = min_payment
-
+                    interest = bal * rate
+                    payment = min(payments.get(i, 0), bal + interest)
                     principal = max(payment - interest, 0)
-                    new_balance = max(balance - principal, 0)
+                    new_balance = max(bal - principal, 0)
 
                     snowball_rows.append({
                         "Month": month_name,
                         "Debt Name": active_debts.at[i, "Debt Name"],
-                        "Starting Balance": round(balance, 2),
+                        "Starting Balance": round(bal, 2),
                         "Interest": round(interest, 2),
                         "Principal": round(principal, 2),
                         "Payment": round(payment, 2),
