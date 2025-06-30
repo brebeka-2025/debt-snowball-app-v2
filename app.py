@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -23,8 +22,6 @@ try:
     })
 
     debt_df = st.data_editor(initial_df, num_rows="dynamic", use_container_width=True)
-
-    # Remove invalid or zero rows
     debt_df = debt_df.dropna()
     debt_df = debt_df[debt_df["Starting Balance"] > 0]
 
@@ -48,7 +45,6 @@ try:
                 remaining_budget = monthly_budget
                 payments = {}
 
-                # First, apply minimums
                 for i in active_debts.index:
                     bal = active_debts.at[i, "Balance"]
                     if bal <= 0:
@@ -58,7 +54,6 @@ try:
                     payments[i] = pay
                     remaining_budget -= pay
 
-                # Then snowball to next unpaid
                 for i in active_debts[active_debts["Balance"] > 0].index:
                     bal = active_debts.at[i, "Balance"]
                     if remaining_budget <= 0:
@@ -67,7 +62,6 @@ try:
                     payments[i] += extra
                     remaining_budget -= extra
 
-                # Apply payments with interest
                 for i in active_debts.index:
                     bal = active_debts.at[i, "Balance"]
                     if bal <= 0:
@@ -100,3 +94,4 @@ try:
             st.success(f"🎉 Debt free in {months_needed} months with ${total_interest:,.2f} in total interest paid.")
 except Exception as e:
     st.error(f"🚨 An error occurred: {e}")
+
