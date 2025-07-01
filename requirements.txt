@@ -1,6 +1,7 @@
-setuptools>=42
-wheel
+setuptools==65.5.1
+wheel==0.38.4
 streamlit==1.25.0
 pandas==1.5.3
 numpy==1.23.5
+
 
