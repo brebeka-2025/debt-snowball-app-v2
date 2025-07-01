@@ -11,40 +11,55 @@ try:
     extra_budget = st.sidebar.number_input("Extra Snowball This Month ($)", min_value=0.0, value=0.0)
     total_budget = base_budget + extra_budget
     st.sidebar.markdown(f"**Total Snowball Budget:** ${total_budget:,.2f}")
-
+    
     st.header("Enter Your Debts")
-
+    
     initial_df = pd.DataFrame({
         "Debt Name": ["Credit Card A", "Credit Card B"],
         "Starting Balance": [1500, 3000],
         "Interest Rate (%)": [22.99, 19.99],
         "Minimum Payment": [50, 75]
     })
-
+    
     debt_df = st.data_editor(initial_df, num_rows="dynamic", use_container_width=True)
     debt_df = debt_df.dropna()
     debt_df = debt_df[debt_df["Starting Balance"] > 0]
-
+    
+    # Calculate and display total minimum payments in sidebar
+    if not debt_df.empty:
+        total_min_payments = debt_df["Minimum Payment"].sum()
+        st.sidebar.markdown("---")  # Add a separator line
+        st.sidebar.markdown(f"**Total Minimum Payments:** ${total_min_payments:,.2f}")
+        
+        # Show remaining budget after minimum payments
+        remaining_for_snowball = total_budget - total_min_payments
+        if remaining_for_snowball >= 0:
+            st.sidebar.markdown(f"**Available for Snowball:** ${remaining_for_snowball:,.2f}")
+        else:
+            st.sidebar.markdown(f"**Budget Shortfall:** ${abs(remaining_for_snowball):,.2f}")
+            st.sidebar.warning("⚠️ Your minimum payments exceed your budget!")
+    
     if st.button("Calculate Snowball Plan"):
         with st.spinner("Calculating your payoff plan..."):
             month = 0
             active_debts = debt_df.copy()
             active_debts["Balance"] = active_debts["Starting Balance"]
             snowball_rows = []
-
+            
             while (active_debts["Balance"] > 0).any() and month < 240:
                 month += 1
                 month_name = (datetime.today().replace(day=1) + pd.DateOffset(months=month-1)).strftime("%b %Y")
-
+                
                 min_payments = []
                 for i in active_debts.index:
                     bal = active_debts.at[i, "Balance"]
                     min_payments.append(min(active_debts.at[i, "Minimum Payment"], bal) if bal > 0 else 0)
-
+                
                 monthly_budget = total_budget
                 remaining_budget = monthly_budget
                 payments = {}
-
+                
+                # Pay minimum payments first
                 for i in active_debts.index:
                     bal = active_debts.at[i, "Balance"]
                     if bal <= 0:
@@ -53,7 +68,8 @@ try:
                     pay = min(min_payments[i], remaining_budget)
                     payments[i] = pay
                     remaining_budget -= pay
-
+                
+                # Apply snowball to smallest debt
                 for i in active_debts[active_debts["Balance"] > 0].index:
                     bal = active_debts.at[i, "Balance"]
                     if remaining_budget <= 0:
@@ -61,18 +77,19 @@ try:
                     extra = min(bal, remaining_budget)
                     payments[i] += extra
                     remaining_budget -= extra
-
+                
+                # Process payments and calculate new balances
                 for i in active_debts.index:
                     bal = active_debts.at[i, "Balance"]
                     if bal <= 0:
                         continue
-
+                    
                     rate = active_debts.at[i, "Interest Rate (%)"] / 100 / 12
                     interest = bal * rate
                     payment = min(payments.get(i, 0), bal + interest)
                     principal = max(payment - interest, 0)
                     new_balance = max(bal - principal, 0)
-
+                    
                     snowball_rows.append({
                         "Month": month_name,
                         "Debt Name": active_debts.at[i, "Debt Name"],
@@ -82,16 +99,17 @@ try:
                         "Payment": round(payment, 2),
                         "Ending Balance": round(new_balance, 2)
                     })
-
+                    
                     active_debts.at[i, "Balance"] = new_balance
-
+            
             result_df = pd.DataFrame(snowball_rows)
+            
             st.subheader("📆 Monthly Snowball Plan")
             st.dataframe(result_df, use_container_width=True)
-
+            
             total_interest = result_df["Interest"].sum()
             months_needed = result_df["Month"].nunique()
             st.success(f"🎉 Debt free in {months_needed} months with ${total_interest:,.2f} in total interest paid.")
+
 except Exception as e:
     st.error(f"🚨 An error occurred: {e}")
-
