@@ -12,6 +12,17 @@ try:
     total_budget = base_budget + extra_budget
     st.sidebar.markdown(f"**Total Snowball Budget:** ${total_budget:,.2f}")
     
+    st.sidebar.markdown("---")
+    st.sidebar.header("Payoff Strategy")
+    
+    # Radio buttons for strategy selection (only one can be selected)
+    strategy = st.sidebar.radio(
+        "Choose your debt payoff strategy:",
+        ["Snowball (Lowest Balance First)", "Avalanche (Highest Interest First)"],
+        index=0,  # Default to Snowball
+        help="Snowball: Pay minimum on all debts, then focus extra payments on the smallest balance. Avalanche: Pay minimum on all debts, then focus extra payments on the highest interest rate."
+    )
+    
     st.header("Enter Your Debts")
     
     initial_df = pd.DataFrame({
@@ -34,10 +45,21 @@ try:
         # Show remaining budget after minimum payments
         remaining_for_snowball = total_budget - total_min_payments
         if remaining_for_snowball >= 0:
-            st.sidebar.markdown(f"**Available for Snowball:** ${remaining_for_snowball:,.2f}")
+            st.sidebar.markdown(f"**Available for Extra Payments:** ${remaining_for_snowball:,.2f}")
         else:
             st.sidebar.markdown(f"**Budget Shortfall:** ${abs(remaining_for_snowball):,.2f}")
             st.sidebar.warning("⚠️ Your minimum payments exceed your budget!")
+        
+        # Sort debts based on selected strategy for display
+        if strategy == "Avalanche (Highest Interest First)":
+            display_df = debt_df.sort_values("Interest Rate (%)", ascending=False).reset_index(drop=True)
+            st.info("💡 **Avalanche Strategy**: Debts are prioritized by highest interest rate first to minimize total interest paid.")
+        else:  # Snowball
+            display_df = debt_df.sort_values("Starting Balance", ascending=True).reset_index(drop=True)
+            st.info("💡 **Snowball Strategy**: Debts are prioritized by lowest balance first for quick psychological wins.")
+        
+        st.subheader("📋 Your Debts (Sorted by Strategy)")
+        st.dataframe(display_df, use_container_width=True)
     
     if st.button("Calculate Snowball Plan"):
         with st.spinner("Calculating your payoff plan..."):
@@ -69,8 +91,16 @@ try:
                     payments[i] = pay
                     remaining_budget -= pay
                 
-                # Apply snowball to smallest debt
-                for i in active_debts[active_debts["Balance"] > 0].index:
+                # Apply extra payments based on selected strategy
+                sorted_debts = active_debts[active_debts["Balance"] > 0].copy()
+                if strategy == "Avalanche (Highest Interest First)":
+                    # Sort by highest interest rate first
+                    sorted_debts = sorted_debts.sort_values("Interest Rate (%)", ascending=False)
+                else:  # Snowball - lowest balance first
+                    # Sort by lowest balance first
+                    sorted_debts = sorted_debts.sort_values("Balance", ascending=True)
+                
+                for i in sorted_debts.index:
                     bal = active_debts.at[i, "Balance"]
                     if remaining_budget <= 0:
                         break
@@ -109,7 +139,8 @@ try:
             
             total_interest = result_df["Interest"].sum()
             months_needed = result_df["Month"].nunique()
-            st.success(f"🎉 Debt free in {months_needed} months with ${total_interest:,.2f} in total interest paid.")
+            strategy_name = "Avalanche" if strategy == "Avalanche (Highest Interest First)" else "Snowball"
+            st.success(f"🎉 Debt free in {months_needed} months using the **{strategy_name}** strategy with ${total_interest:,.2f} in total interest paid.")
 
 except Exception as e:
     st.error(f"🚨 An error occurred: {e}")
