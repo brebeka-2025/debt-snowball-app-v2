@@ -1,14 +1,44 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import json
 from datetime import datetime
 
 st.title("Debt Snowball Calculator")
 
+# Initialize session state for loaded data
+if 'loaded_data' not in st.session_state:
+    st.session_state.loaded_data = None
+
 try:
+    # File upload section at the top
+    st.header("📁 Load Previous Data")
+    uploaded_file = st.file_uploader("Upload your saved debt data", type="json", help="Upload a previously downloaded JSON file to restore your debt information")
+    
+    # Load data if file is uploaded
+    if uploaded_file is not None:
+        try:
+            loaded_data = json.load(uploaded_file)
+            st.session_state.loaded_data = loaded_data
+            st.success("✅ Data loaded successfully!")
+        except Exception as e:
+            st.error(f"❌ Error loading file: {e}")
+            st.session_state.loaded_data = None
+    
+    # Use loaded data or defaults
+    if st.session_state.loaded_data:
+        default_base_budget = st.session_state.loaded_data.get("budget", {}).get("base", 2000.0)
+        default_extra_budget = st.session_state.loaded_data.get("budget", {}).get("extra", 0.0)
+        default_strategy = st.session_state.loaded_data.get("strategy", "Snowball (Lowest Balance First)")
+        loaded_debts = st.session_state.loaded_data.get("debts", [])
+    else:
+        default_base_budget = 2000.0
+        default_extra_budget = 0.0
+        default_strategy = "Snowball (Lowest Balance First)"
+        loaded_debts = []
     st.sidebar.header("Monthly Budget")
-    base_budget = st.sidebar.number_input("Base Monthly Budget ($)", min_value=0.0, value=2000.0)
-    extra_budget = st.sidebar.number_input("Extra Snowball This Month ($)", min_value=0.0, value=0.0)
+    base_budget = st.sidebar.number_input("Base Monthly Budget ($)", min_value=0.0, value=default_base_budget)
+    extra_budget = st.sidebar.number_input("Extra Snowball This Month ($)", min_value=0.0, value=default_extra_budget)
     total_budget = base_budget + extra_budget
     st.sidebar.markdown(f"**Total Snowball Budget:** ${total_budget:,.2f}")
     
@@ -16,21 +46,28 @@ try:
     st.sidebar.header("Payoff Strategy")
     
     # Radio buttons for strategy selection (only one can be selected)
+    strategy_options = ["Snowball (Lowest Balance First)", "Avalanche (Highest Interest First)"]
+    default_index = strategy_options.index(default_strategy) if default_strategy in strategy_options else 0
+    
     strategy = st.sidebar.radio(
         "Choose your debt payoff strategy:",
-        ["Snowball (Lowest Balance First)", "Avalanche (Highest Interest First)"],
-        index=0,  # Default to Snowball
+        strategy_options,
+        index=default_index,
         help="Snowball: Pay minimum on all debts, then focus extra payments on the smallest balance. Avalanche: Pay minimum on all debts, then focus extra payments on the highest interest rate."
     )
     
     st.header("Enter Your Debts")
     
-    initial_df = pd.DataFrame({
-        "Debt Name": ["Credit Card A", "Credit Card B"],
-        "Starting Balance": [1500, 3000],
-        "Interest Rate (%)": [22.99, 19.99],
-        "Minimum Payment": [50, 75]
-    })
+    # Use loaded debts or default template
+    if loaded_debts:
+        initial_df = pd.DataFrame(loaded_debts)
+    else:
+        initial_df = pd.DataFrame({
+            "Debt Name": ["Credit Card A", "Credit Card B"],
+            "Starting Balance": [1500, 3000],
+            "Interest Rate (%)": [22.99, 19.99],
+            "Minimum Payment": [50, 75]
+        })
     
     debt_df = st.data_editor(initial_df, num_rows="dynamic", use_container_width=True)
     debt_df = debt_df.dropna()
